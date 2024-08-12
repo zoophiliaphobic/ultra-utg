@@ -16,6 +16,11 @@ rbxgeneral:SendAsync("ultrautg")
 
 local currentmap = workspace:WaitForChild("CurrentMap")
 
+local rayparams = RaycastParams.new()
+rayparams.FilterType = Enum.RaycastFilterType.Include
+rayparams.FilterDescendantsInstances = {currentmap}
+rayparams.RespectCanCollide = true
+
 local screengui = Instance.new("ScreenGui",cloneref(game:GetService("CoreGui")))
 local mainframe = Instance.new("Frame")
 
@@ -49,72 +54,166 @@ function quicktween(what,tweeninfo,properties)
     tweens:Create(what,tweeninfo,properties):Play()
 end
 
+function freeze(model,isfrozen)
+    for i,v in pairs(model:GetChildren()) do
+        if v:IsA("BasePart") then
+            v.Anchored = isfrozen
+        end
+    end
+end
+
+function playsound(soundid,parent,volume,basepitch,pitchdeviation)
+    local ss = Instance.new("Sound")
+    ss.Volume = volume or 0.5
+    pitchdeviation = pitchdeviation or 0
+    ss.PlaybackSpeed = (basepitch or 1)+Random.new():NextNumber(-pitchdeviation,pitchdeviation)
+
+    if typeof(soundid) == "number" then
+        soundid = "rbxassetid://".. tostring(soundid)
+    end
+    ss.SoundId = soundid
+
+    ss.Parent = parent
+    ss.Ended:Once(function()
+        ss:Destroy()
+    end)
+    ss:Play()
+end
+
 local ACTIONS = {
     [1] = {
         name = "stunall",
-        onreplicate = function(begin,user)
-            if begin then
-                if user ~= plr then
-                    local char = plr.Character
-                    local userchar = user.Character
+        onreplicate = function(user)
+            if user ~= plr then
+                local char = plr.Character
+                local userchar = user.Character
 
-                    if userchar and char then
-                        local pos = char:GetPivot()
-
-                        local stuntimer = 2
-                        while stuntimer > 0 do
-                            char.PrimaryPart.AssemblyLinearVelocity = Vector3.new()
-                            char:PivotTo(pos)
-                            stuntimer -= task.wait(0.1)
-                        end
-
-                    end
+                if userchar and char then
+                    freeze(char,true)
+                    task.wait(2)
+                    freeze(char,false)
                 end
             end
         end
     },
     [2] = {
         name = "shockwave",
-        onreplicate = function(begin,user)
-            if begin then
-                local char = plr.Character
-                local userchar = user.Character
+        onreplicate = function(user)
+            local char = plr.Character
+            local userchar = user.Character
 
-                if userchar and char then
-                    local prim = char.PrimaryPart
+            if userchar and char then
+                local prim = char.HumanoidRootPart
 
-                    if prim then
-                        local origin = userchar:GetPivot().Position
-                        local wave = Instance.new("Part")
-                        wave.Shape = Enum.PartType.Ball
-                        wave.Position = origin
-                        wave.Size = Vector3.new()
-                        wave.Color = Color3.fromRGB(0,120,255)
-                        wave.Material = Enum.Material.Neon
-                        wave.Transparency = 0.7
-                        wave.CanCollide = false
-                        wave.Anchored = true
+                if prim then
+                    local origin = prim.Position
+                    local wave = Instance.new("Part")
+                    wave.Shape = Enum.PartType.Ball
+                    wave.Position = origin
+                    wave.Size = Vector3.new()
+                    wave.Color = Color3.fromRGB(0,120,255)
+                    wave.Material = Enum.Material.Neon
+                    wave.Transparency = 0.7
+                    wave.CanCollide = false
+                    wave.Anchored = true
+                    wave:SetAttribute("NoClimb",true)
 
-                        if user ~= plr then
-                            local debounce = true
-                            wave.Touched:Connect(function(hit)
-                                if wave.Transparency < 0.94 then
-                                    local hitchar = hit:FindFirstAncestorOfClass("Model")
-                                
-                                    if hitchar == char then
-                                        debounce = false
-                                        prim.AssemblyLinearVelocity = (prim.Position-origin).Unit*50
+                    if user ~= plr then
+                        local debounce = true
+                        wave.Touched:Connect(function(hit)
+                            if wave.Transparency < 0.94 then
+                                local hitchar = hit:FindFirstAncestorOfClass("Model")
+                            
+                                if hitchar == char then
+                                    debounce = false
+                                    prim.AssemblyLinearVelocity = (prim.Position-origin).Unit*50
 
-                                        task.wait(0.1)
-                                        debounce = true
-                                    end
+                                    task.wait(0.2)
+                                    debounce = true
                                 end
-                            end)
+                            end
+                        end)
+                    end
+                    
+                    wave.Parent = getmap()
+                    quicktween(wave,0.66,{Transparency=1,Size=Vector3.new(45,45,45)})
+                    debris:AddItem(wave,0.66)
+                end
+            end
+        end
+    },
+    [3] = {
+        name = "pillar",
+        onreplicate = function(user)
+            local char = plr.Character
+            local userchar = user.Character
+
+            if userchar and char then
+                local prim = char.HumanoidRootPart
+
+                if prim then
+                    local origin = prim.Position+Vector3.new(0,4,0)+prim.CFrame.LookVector*7
+                    local ray = workspace:Raycast(origin,Vector3.new(0,-10,0),rayparams)
+
+                    if ray then
+                        local hitpos = ray.Position
+
+                        if ray.Instance:GetAttribute("nopillarray") then
+                            return
                         end
-                        
-                        wave.Parent = getmap()
-                        quicktween(wave,0.66,{Transparency=1,Size=Vector3.new(45,45,45)})
-                        debris:AddItem(wave,0.66)
+
+                        playsound("rbxassetid://7842412427",prim,0.8,0.5,0.1)
+                        playsound("rbxassetid://8820780818",prim,0.5,1,0.1)
+                        --playsound("rbxassetid://3763467590",prim,1,1,0.1)
+
+                        task.wait(0.2)
+
+                        local base = Instance.new("Part")
+                        base.Position = hitpos
+                        base.Size = Vector3.new(10,0,10)
+                        base.Color = ray.Instance.Color
+                        base.Material = ray.Material
+                        base.Anchored = true
+                        base.TopSurface = Enum.SurfaceType.Studs
+                        base.BottomSurface = Enum.SurfaceType.Inlet
+                        base:SetAttribute("nopillarray",true)
+
+                        local pillar = Instance.new("Part")
+                        pillar.Position = hitpos
+                        pillar.Size = Vector3.new(9,0,9)
+                        pillar.Color = ray.Instance.Color
+                        pillar.Material = ray.Material
+                        pillar.Anchored = true
+                        pillar.TopSurface = Enum.SurfaceType.Studs
+                        pillar.BottomSurface = Enum.SurfaceType.Inlet
+                        pillar:SetAttribute("nopillarray",true)
+
+                        local bouncer = Instance.new("Part")
+                        bouncer.Position = hitpos
+                        bouncer.Size = Vector3.new(9,0.1,9)
+                        bouncer.Anchored = true
+                        bouncer.Transparency = 1
+                        bouncer:SetAttribute("BounceAmount",135)
+                        bouncer:SetAttribute("nopillarray",true)
+
+                        base.Parent = getmap()
+                        pillar.Parent = getmap()
+                        bouncer.Parent = getmap()
+                        playsound("rbxassetid://4912007258",pillar,1,0.5,0.1)
+                        quicktween(base,0.35,{Size=Vector3.new(10,15,10),Position=hitpos+Vector3.new(0,15/2,0)})
+                        quicktween(pillar,1,{Size=Vector3.new(9,40,9),Position=hitpos+Vector3.new(0,40/2,0)})
+                        quicktween(bouncer,1,{Position=hitpos+Vector3.new(0,40,0)})
+                        debris:AddItem(base,10)
+                        debris:AddItem(pillar,10)
+                        debris:AddItem(bouncer,1)
+
+                        task.delay(10-1.35,function()
+                            local tinfo = TweenInfo.new(1.35,Enum.EasingStyle.Quad,Enum.EasingDirection.In)
+                            quicktween(base,tinfo,{Size=Vector3.new(8,0,8),Position=hitpos})
+                            quicktween(pillar,tinfo,{Size=Vector3.new(7,0,7),Position=hitpos})
+                        end)
+                    else
+                        return false
                     end
                 end
             end
@@ -223,15 +322,7 @@ function playerpartchanged(part)
         print(actbl.name)
 
         if func then
-            task.spawn(function()
-                func(true,who)
-            end)
-
-            part.Changed:Once(function()
-                if part.Position.Y ~= arg1 then
-                    func(false,who)
-                end
-            end)
+            return func(who)
         end
     end
 end
@@ -282,6 +373,7 @@ end
 function replicate(funcname1)
     if allowreplication then
         allowreplication = false
+        screengui.Enabled = false
 
         local userid = useridtopos(removezeros(plr.UserId))
         adjustpart(mypart,{CFrame=CFrame.new(Vector3.new(userid.X,userid.Y,0))})
@@ -291,7 +383,9 @@ function replicate(funcname1)
         print("replicate: ".. arg1,funcname1)
 
         adjustpart(mypart,{CFrame=CFrame.new(Vector3.new(userid.X,userid.Y,(arg1 or 0)))})
+        task.wait(5)
         allowreplication = true
+        screengui.Enabled = true
     end
 end
 
